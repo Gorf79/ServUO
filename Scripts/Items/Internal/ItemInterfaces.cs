@@ -18,10 +18,20 @@ namespace Server.Items
         string OwnerName { get; set; }
     }
 
-    public interface IFlippable
+    public interface IFlipable
     {
         int WestID { get; }
         int NorthID { get; }
         void OnFlip();
+    }
+
+    public interface IQuality
+    {
+        ItemQuality Quality { get; set; }
+    }
+
+    public interface IResource : IQuality
+    {
+        CraftResource Resource { get; set; }
     }
 }

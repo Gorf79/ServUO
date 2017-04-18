@@ -765,8 +765,6 @@ namespace Server
 		private long m_NextActionMessage;
 		private bool m_Paralyzed;
 		private ParalyzedTimer m_ParaTimer;
-		private bool _Sleep;
-		private SleepTimer _SleepTimer;
 		private bool m_Frozen;
 		private FrozenTimer m_FrozenTimer;
 		private int m_AllowedStealthSteps;
@@ -834,7 +832,10 @@ namespace Server
 			}
 		}
 
-		protected virtual void OnRaceChange(Race oldRace)
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool CharacterOut { get; set; }
+
+        protected virtual void OnRaceChange(Race oldRace)
 		{ }
 
 		public virtual double RacialSkillBonus { get { return 0; } }
@@ -855,7 +856,7 @@ namespace Server
 
         [CommandProperty(AccessLevel.Decorator)]
         public bool SpecialSlayerMechanics { get { return m_SpecialSlayerMechanics; } }
-  
+
 		public int[] Resistances { get { return m_Resistances; } }
 
 		public virtual int BasePhysicalResistance { get { return 0; } }
@@ -1601,15 +1602,15 @@ namespace Server
 		public int AllowedStealthSteps { get { return m_AllowedStealthSteps; } set { m_AllowedStealthSteps = value; } }
 
 		/* Logout:
-		* 
+		*
 		* When a client logs into mobile x
 		*  - if ( x is Internalized ) move x to logout location and map
-		* 
+		*
 		* When a client attached to a mobile disconnects
 		*  - LogoutTimer is started
 		*	   - Delay is taken from Region.GetLogoutDelay to allow insta-logout regions.
 		*     - OnTick : Location and map are stored, and mobile is internalized
-		* 
+		*
 		* Some things to consider:
 		*  - An internalized person getting killed (say, by poison). Where does the body go?
 		*  - Regions now have a GetLogoutDelay( Mobile m ); virtual function (see above)
@@ -1688,26 +1689,6 @@ namespace Server
 		}
 
 		[CommandProperty(AccessLevel.GameMaster)]
-		public virtual bool Asleep
-		{
-			get { return _Sleep; }
-			set
-			{
-				if (_Sleep != value)
-				{
-					_Sleep = value;
-
-					if (_SleepTimer != null)
-					{
-						Send(SpeedControl.Disable);
-						_SleepTimer.Stop();
-						_SleepTimer = null;
-					}
-				}
-			}
-		}
-
-		[CommandProperty(AccessLevel.GameMaster)]
 		public bool DisarmReady
 		{
 			get { return m_DisarmReady; }
@@ -1757,18 +1738,6 @@ namespace Server
 
 				m_ParaTimer = new ParalyzedTimer(this, duration);
 				m_ParaTimer.Start();
-			}
-		}
-
-		public void Sleep(TimeSpan duration)
-		{
-			if (!_Sleep)
-			{
-				Asleep = true;
-				Send(SpeedControl.WalkSpeed);
-
-				_SleepTimer = new SleepTimer(this, duration);
-				_SleepTimer.Start();
 			}
 		}
 
@@ -2022,23 +1991,6 @@ namespace Server
 			protected override void OnTick()
 			{
 				m_Mobile.Paralyzed = false;
-			}
-		}
-
-		private class SleepTimer : Timer
-		{
-			private readonly Mobile _Mobile;
-
-			public SleepTimer(Mobile m, TimeSpan duration)
-				: base(duration)
-			{
-				Priority = TimerPriority.TwentyFiveMS;
-				_Mobile = m;
-			}
-
-			protected override void OnTick()
-			{
-				_Mobile.Asleep = false;
 			}
 		}
 
@@ -3155,7 +3107,7 @@ namespace Server
 					return false;
 				}
 
-				if (m_Paralyzed || m_Frozen || _Sleep)
+				if (m_Paralyzed || m_Frozen)
 				{
 					SendLocalizedMessage(500111); // You are frozen and can not move.
 
@@ -3959,11 +3911,6 @@ namespace Server
 				m_ParaTimer.Stop();
 			}
 
-			if (_SleepTimer != null)
-			{
-				_SleepTimer.Stop();
-			}
-
 			if (m_FrozenTimer != null)
 			{
 				m_FrozenTimer.Stop();
@@ -4092,17 +4039,6 @@ namespace Server
 				if (m_FrozenTimer != null)
 				{
 					m_FrozenTimer.Stop();
-				}
-			}
-
-			if (Asleep)
-			{
-				Asleep = false;
-				Send(SpeedControl.Disable);
-
-				if (_SleepTimer != null)
-				{
-					_SleepTimer.Stop();
 				}
 			}
 
@@ -5608,16 +5544,6 @@ namespace Server
 
 				Paralyzed = false;
 
-				if (Asleep)
-				{
-					Asleep = false;
-
-					if (from != null)
-					{
-						from.Send(SpeedControl.Disable);
-					}
-				}
-
 				switch (m_VisibleDamageType)
 				{
 					case VisibleDamageType.Related:
@@ -6352,7 +6278,7 @@ namespace Server
             {
                 writer.Write(false);
             }
-            
+
             writer.Write(m_IgnoreMobiles);
 
 			writer.WriteDeltaTime(m_LastStrGain);
@@ -7623,11 +7549,11 @@ namespace Server
 
 			Region newRegion = Region.Find(m_Location, m_Map);
 			Region oldRegion = m_Region;
-			
+
 			if (newRegion != oldRegion)
 			{
 				m_Region = newRegion;
-				
+
 				Region.OnRegionChange(this, oldRegion, newRegion);
 				OnRegionChange(oldRegion, newRegion);
 			}
@@ -8490,29 +8416,6 @@ namespace Server
 		#endregion
 
 		public virtual int Luck { get { return 0; } }
-        public virtual int AttackChance { get { return 0; } }
-        public virtual int WeaponSpeed { get { return 0; } }
-        public virtual int WeaponDamage { get { return 0; } }
-        public virtual int LowerRegCost { get { return 0; } }
-        public virtual int RegenHits { get { return 0; } }
-        public virtual int RegenStam { get { return 0; } }
-        public virtual int RegenMana { get { return 0; } }
-        public virtual int ReflectPhysical { get { return 0; } }
-        public virtual int EnhancePotions { get { return 0; } }
-        public virtual int DefendChance { get { return 0; } }
-        public virtual int SpellDamage { get { return 0; } }
-        public virtual int CastRecovery { get { return 0; } }
-        public virtual int CastSpeed { get { return 0; } }
-        public virtual int LowerManaCost { get { return 0; } }
-        public virtual int BonusStr { get { return 0; } }
-        public virtual int BonusDex { get { return 0; } }
-        public virtual int BonusInt { get { return 0; } }
-        public virtual int BonusHits { get { return 0; } }
-        public virtual int BonusStam { get { return 0; } }
-        public virtual int BonusMana { get { return 0; } }
-        public virtual int MaxHitIncrease { get { return 0; } }
-        public virtual int MaxStamIncrease { get { return 0; } }
-        public virtual int MaxManaIncrease { get { return 0; } }
 
         public virtual int HuedItemID { get { return (m_Female ? 0x2107 : 0x2106); } }
 
@@ -8636,7 +8539,7 @@ namespace Server
 		{
 			int flags = 0x0;
 
-			if (m_Paralyzed || m_Frozen || _Sleep)
+			if (m_Paralyzed || m_Frozen)
 			{
 				flags |= 0x01;
 			}
@@ -8919,10 +8822,15 @@ namespace Server
 
 						if (m_Map == Map.Internal && m_LogoutMap != null)
 						{
-							Map = m_LogoutMap;
+                            CharacterOut = true;
+                            Map = m_LogoutMap;
 							Location = m_LogoutLocation;
 						}
-					}
+                        else
+                        {
+                            CharacterOut = false;
+                        }
+                    }
 
 					for (int i = m_Items.Count - 1; i >= 0; --i)
 					{
@@ -10692,7 +10600,7 @@ namespace Server
 
 				return false;
 			}
-			
+
 			if (from.InRange(Location, 2))
 			{
 				return OpenTrade(from, dropped);
@@ -10746,7 +10654,7 @@ namespace Server
 		/// 			SendMessage( "That is too heavy for you to lift." );
 		/// 			return false;
 		/// 		}
-		/// 		
+		///
 		/// 		return base.OnDragLift( item );
 		///  }</code>
 		/// </example>
@@ -11628,7 +11536,7 @@ namespace Server
 			}
 		}
 
-		[CommandProperty(AccessLevel.Counselor, AccessLevel.Decorator)]
+	    [CommandProperty(AccessLevel.Counselor, AccessLevel.Decorator)]
 		public virtual bool Criminal
 		{
 			get { return m_Criminal; }
@@ -11661,6 +11569,9 @@ namespace Server
 				}
 			}
 		}
+
+		[CommandProperty(AccessLevel.Counselor)]
+		public virtual bool Murderer { get { return m_Kills >= 5; } }
 
 		public bool CheckAlive()
 		{
@@ -12255,7 +12166,7 @@ namespace Server
 		public static bool GuildClickMessage { get { return m_GuildClickMessage; } set { m_GuildClickMessage = value; } }
 		public static bool OldPropertyTitles { get { return m_OldPropertyTitles; } set { m_OldPropertyTitles = value; } }
 
-		public virtual bool ShowFameTitle { get { return true; } } //(m_Player || m_Body.IsHuman) && m_Fame >= 10000; } 
+		public virtual bool ShowFameTitle { get { return true; } } //(m_Player || m_Body.IsHuman) && m_Fame >= 10000; }
 
 		/// <summary>
 		///     Overridable. Event invoked when the Mobile is single clicked.

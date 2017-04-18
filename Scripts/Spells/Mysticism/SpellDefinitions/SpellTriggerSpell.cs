@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using Server.ContextMenus;
 using Server.Network;
 
-namespace Server.Spells.Mystic
+namespace Server.Spells.Mysticism
 {
 	public class SpellTriggerSpell : MysticSpell
 	{
@@ -182,6 +182,8 @@ namespace Server.Spells.Mystic
     public class SpellStone : SpellScroll
     {
         private SpellTriggerDef m_SpellDef;
+
+        public override bool Nontransferable { get { return true; } }
 
         [Constructable]
         public SpellStone(SpellTriggerDef spellDef)

@@ -90,6 +90,27 @@ namespace Server.Items
     }
 }
 
+namespace Server.Mobiles
+{
+    public static class MobileExtensions
+    {
+        public static void SayTo(this Mobile mobile, Mobile to, int number, int hue)
+        {
+            mobile.PrivateOverheadMessage(MessageType.Regular, hue, number, to.NetState);
+        }
+
+        public static void SayTo(this Mobile mobile, Mobile to, int number, string args, int hue)
+        {
+            mobile.PrivateOverheadMessage(MessageType.Regular, hue, number, args, to.NetState);
+        }
+
+        public static void SayTo(this Mobile mobile, Mobile to, string text, int hue, bool ascii = false)
+        {
+            mobile.PrivateOverheadMessage(MessageType.Regular, hue, ascii, text, to.NetState);
+        }
+    }
+}
+
 namespace Server
 {
     public static class GeomontryExtentions
@@ -115,6 +136,9 @@ namespace Server
 
         public static List<Item> GetItems(this Region region)
         {
+            if (region == null)
+                return null;
+
             List<Item> list = new List<Item>();
 
             foreach(Sector s in region.Sectors)
@@ -130,6 +154,11 @@ namespace Server
 
         public static IEnumerable<Item> GetEnumeratedItems(this Region region)
         {
+            if (region == null)
+            {
+                yield break;
+            }
+
             List<Item> list = region.GetItems();
             IEnumerable<Item> e;
 
@@ -149,6 +178,11 @@ namespace Server
 
         public static int GetItemCount(this Region region)
         {
+            if (region == null)
+            {
+                return 0;
+            }
+
             int count = 0;
 
             foreach(Sector s in region.Sectors)
@@ -161,6 +195,11 @@ namespace Server
 
         public static int GetItemCount(this Region region, Func<Item, bool> predicate)
         {
+            if (region == null)
+            {
+                return 0;
+            }
+
             int count = 0;
 
             foreach(Sector s in region.Sectors)
@@ -173,6 +212,11 @@ namespace Server
 
         public static List<BaseMulti> GetMultis(this Region region)
         {
+            if (region == null)
+            {
+                return null;
+            }
+
             List<BaseMulti> list = new List<BaseMulti>();
 
             foreach (Sector s in region.Sectors)
@@ -188,6 +232,11 @@ namespace Server
 
         public static IEnumerable<BaseMulti> GetEnumeratedMultis(this Region region)
         {
+            if (region == null)
+            {
+                yield break;
+            }
+
             List<BaseMulti> list = region.GetMultis();
             IEnumerable<BaseMulti> e;
 
@@ -207,6 +256,11 @@ namespace Server
 
         public static int GetMultiCount(this Region region)
         {
+            if (region == null)
+            {
+                return 0;
+            }
+
             int count = 0;
 
             foreach (Sector s in region.Sectors)
@@ -219,6 +273,11 @@ namespace Server
 
         public static IEnumerable<Mobile> GetEnumeratedMobiles(this Region region)
         {
+            if (region == null)
+            {
+                yield break;
+            }
+
             List<Mobile> list = region.GetMobiles();
             IEnumerable<Mobile> e;
 

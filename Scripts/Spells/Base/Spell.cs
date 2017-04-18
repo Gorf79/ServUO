@@ -21,7 +21,7 @@ using Server.Spells.Spellweaving;
 using Server.Targeting;
 using Server.Spells.SkillMasteries;
 using System.Reflection;
-using Server.Spells.Mystic;
+using Server.Spells.Mysticism;
 #endregion
 
 namespace Server.Spells
@@ -843,7 +843,12 @@ namespace Server.Spells
         #endregion
 
         public virtual void OnBeginCast()
-		{ }
+		{
+            SendCastEffect();
+        }
+
+        public virtual void SendCastEffect()
+        { }
 
 		public virtual void GetCastSkills(out double min, out double max)
 		{
@@ -986,7 +991,7 @@ namespace Server.Spells
 				fc = fcMax;
 			}
 
-            if (ProtectionSpell.Registry.ContainsKey(m_Caster) /*|| EodonianPotion.IsUnderEffects(m, PotionEffect.Urali)*/)
+            if (ProtectionSpell.Registry.ContainsKey(m_Caster) || EodonianPotion.IsUnderEffects(m_Caster, PotionEffect.Urali))
             {
                 fc = Math.Min(fcMax - 2, fc - 2);
             }
@@ -1246,10 +1251,13 @@ namespace Server.Spells
 						// Spell.NextSpellDelay;
 
 					Target originalTarget = m_Spell.m_Caster.Target;
-               
-                    if (m_Spell.InstantTarget != null) {
+
+                    if (m_Spell.InstantTarget != null)
+                    {
                         m_Spell.OnCastInstantTarget();
-                    } else {
+                    }
+                    else
+                    {
                         m_Spell.OnCast();
                     }
 

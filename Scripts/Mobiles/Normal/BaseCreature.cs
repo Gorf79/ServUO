@@ -49,8 +49,7 @@ namespace Server.Mobiles
         Weakest, // Attack the weakest
         Closest, // Attack the closest
         Evil, // Only attack aggressor -or- negative karma
-        Good, // Only attack aggressor -or- positive karma
-        Enemy // Only attacks those returned true in IsEnemy(...)
+        Good // Only attack aggressor -or- positive karma
     }
 
     public enum OrderType
@@ -127,6 +126,19 @@ namespace Server.Mobiles
         Horned,
         Barbed,
         Fur
+    }
+
+    public enum TribeType
+    {
+        None,
+        Terathan,
+        Ophidian,
+        Savage,
+        Orc,
+        Fey,
+        Undead,
+        GrayGoblin,
+        GreenGoblin
     }
     #endregion
 
@@ -328,7 +340,7 @@ namespace Server.Mobiles
         #region Bonding
         public const bool BondingEnabled = true;
 
-        public virtual bool IsBondable { get { return (BondingEnabled && !Summoned); } }
+        public virtual bool IsBondable { get { return (BondingEnabled && !Summoned && !m_Allured); } }
         public virtual TimeSpan BondingDelay { get { return TimeSpan.FromDays(7.0); } }
         public virtual TimeSpan BondingAbandonDelay { get { return TimeSpan.FromDays(1.0); } }
 
@@ -942,7 +954,7 @@ namespace Server.Mobiles
                     PlayerMobile pm = m as PlayerMobile;
                     toDrain = (int)drNO.ThieveItems.LifeShieldLotion.HandleLifeDrain(pm, toDrain);
                 }
-                //end 
+                //end
 
 
                 Hits += toDrain;
@@ -992,6 +1004,34 @@ namespace Server.Mobiles
         public const int MaxOwners = 5;
 
         public virtual OppositionGroup OppositionGroup { get { return null; } }
+        public virtual bool IsMilitiaFighter { get { return false; } }
+
+        // Tribe Opposition stuff
+        public virtual TribeType Tribe{ get{ return TribeType.None ; } } // What opposition list am I in?
+
+        public virtual bool IsTribeEnemy(Mobile m)
+        {
+            // Target must be BaseCreature
+            if (!(m is BaseCreature))
+            {
+                return false;
+            }
+
+            BaseCreature c = (BaseCreature)m;
+
+            switch(Tribe)
+            {
+                case TribeType.Terathan: return (c.Tribe == TribeType.Ophidian);
+                case TribeType.Ophidian: return (c.Tribe == TribeType.Terathan);
+                case TribeType.Savage: return (c.Tribe == TribeType.Orc);
+                case TribeType.Orc: return (c.Tribe == TribeType.Savage);
+                case TribeType.Fey: return (c.Tribe == TribeType.Undead);
+                case TribeType.Undead: return (c.Tribe == TribeType.Fey);
+                case TribeType.GrayGoblin: return (c.Tribe == TribeType.GreenGoblin);
+                case TribeType.GreenGoblin: return (c.Tribe == TribeType.GrayGoblin);
+                default: return false;
+            }
+        }
 
         #region Friends
         public List<Mobile> Friends { get { return m_Friends; } }
@@ -1021,25 +1061,44 @@ namespace Server.Mobiles
             }
         }
 
-        public virtual bool IsFriend(Mobile m)
-        {
-            OppositionGroup g = OppositionGroup;
+		public virtual bool IsFriend(Mobile m)
+		{
+			if (Core.TOL)
+			{
+				if (Tribe != TribeType.None && IsTribeEnemy(m))
+				{
+					return false;
+				}
+			}
+			else
+			{
+				OppositionGroup g = OppositionGroup;
 
-            if (g != null && g.IsEnemy(this, m))
-            {
-                return false;
-            }
+				if (g != null && g.IsEnemy(this, m))
+				{
+					return false;
+				}
+			}
 
-            if (!(m is BaseCreature))
-            {
-                return false;
-            }
+			if (!(m is BaseCreature))
+			{
+				return false;
+			}
 
-            BaseCreature c = (BaseCreature)m;
+			BaseCreature c = (BaseCreature)m;
 
-            return (m_iTeam == c.m_iTeam && ((m_bSummoned || m_bControlled) == (c.m_bSummoned || c.m_bControlled))
-                   /* && c.Combatant != this */);
-        }
+			if (m_iTeam != c.m_iTeam)
+			{
+				return false;
+			}
+/*
+			if (c.Combatant == this)
+			{
+				return false;
+			}
+*/
+			return ((m_bSummoned || m_bControlled) == (c.m_bSummoned || c.m_bControlled));
+		}
         #endregion
 
         #region Allegiance
@@ -1087,67 +1146,103 @@ namespace Server.Mobiles
         }
         #endregion
 
-        public virtual bool IsEnemy(Mobile m)
-        {
-            XmlIsEnemy a = (XmlIsEnemy)XmlAttach.FindAttachment(this, typeof(XmlIsEnemy));
+		public virtual bool IsEnemy(Mobile m)
+		{
+			XmlIsEnemy a = (XmlIsEnemy)XmlAttach.FindAttachment(this, typeof(XmlIsEnemy));
 
-            if (a != null)
-            {
-                return a.IsEnemy(m);
-            }
+			if (a != null)
+			{
+				return a.IsEnemy(m);
+			}
 
-            OppositionGroup g = OppositionGroup;
+			if (Core.TOL)
+			{
+				if (Tribe != TribeType.None && IsTribeEnemy(m))
+				{
+					return true;
+				}
+			}
+			else
+			{
+				OppositionGroup g = OppositionGroup;
 
-            if (g != null && g.IsEnemy(this, m))
-            {
-                return true;
-            }
+				if (g != null && g.IsEnemy(this, m))
+				{
+					return true;
+				}
+			}
 
-            if (m is BaseGuard)
-            {
-                return false;
-            }
+			if (m is BaseGuard)
+			{
+				return false;
+			}
 
-            if (GetFactionAllegiance(m) == Allegiance.Ally)
-            {
-                return false;
-            }
+			// Faction Allied Players/Pets are not my enemies
+			if (GetFactionAllegiance(m) == Allegiance.Ally)
+			{
+				return false;
+			}
 
-            Ethic ourEthic = EthicAllegiance;
-            Player pl = Ethics.Player.Find(m, true);
+			Ethic ourEthic = EthicAllegiance;
+			Player pl = Ethics.Player.Find(m, true);
 
-            if (pl != null && pl.IsShielded && (ourEthic == null || ourEthic == pl.Ethic))
-            {
-                return false;
-            }
+			// Ethic Allied Players/Pets are not my enemies
+			if (pl != null && pl.IsShielded && (ourEthic == null || ourEthic == pl.Ethic))
+			{
+				return false;
+			}
 
-            if (m is PlayerMobile && ((PlayerMobile)m).HonorActive)
-            {
-                return false;
-            }
+			if (m is PlayerMobile && ((PlayerMobile)m).HonorActive)
+			{
+				return false;
+			}
 
-            if (TransformationSpellHelper.UnderTransformation(m, typeof(EtherealVoyageSpell)))
-            {
-                return false;
-            }
+			if (TransformationSpellHelper.UnderTransformation(m, typeof(EtherealVoyageSpell)))
+			{
+				return false;
+			}
 
-            if (!(m is BaseCreature) || m is MilitiaFighter)
-            {
-                return true;
-            }
+			if (!(m is BaseCreature))
+			{
+				return true;
+			}
 
-            BaseCreature c = (BaseCreature)m;
-            BaseCreature t = this;
+			BaseCreature c = (BaseCreature)m;
 
-            // Summons should have same rules as their master
-            if (c.Summoned && c.SummonMaster != null && c.SummonMaster is BaseCreature)
-                c = c.SummonMaster as BaseCreature;
+			if (c.IsMilitiaFighter)
+			{
+				return true;
+			}
 
-            if (t.Summoned && t.SummonMaster != null && t.SummonMaster is BaseCreature)
-                t = t.SummonMaster as BaseCreature;
+			BaseCreature t = this;
 
-            return (t.m_iTeam != c.m_iTeam || ((t.m_bSummoned || t.m_bControlled) != (c.m_bSummoned || c.m_bControlled))/* || c.Combatant == this*/ );
-        }
+			// Summons should have same rules as their master
+			if (c.Summoned && c.SummonMaster != null && c.SummonMaster is BaseCreature)
+			{
+				c = c.SummonMaster as BaseCreature;
+			}
+
+			if (t.Summoned && t.SummonMaster != null && t.SummonMaster is BaseCreature)
+			{
+				t = t.SummonMaster as BaseCreature;
+			}
+
+			// Creatures on other teams are my enemies
+			if (t.m_iTeam != c.m_iTeam)
+			{
+				return true;
+			}
+/*
+			// Creatures attacking me are my enemies
+			if (c.Combatant == this)
+			{
+				return true;
+			}
+*/
+			// If I'm summoned/controlled and they aren't summoned/controlled, they are my enemy
+			// If I'm not summoned/controlled and they are summoned/controlled, they are my enemy
+			return ((t.m_bSummoned || t.m_bControlled) != (c.m_bSummoned || c.m_bControlled));
+		}
 
         public override string ApplyNameSuffix(string suffix)
         {
@@ -1647,8 +1742,8 @@ namespace Server.Mobiles
 
         Seems this actually was removed on OSI somewhere between the original bug report and now.
         We will call it ML, until we can get better information. I suspect it was on the OSI TC when
-        originally it taken out of RunUO, and not implmented on OSIs production shards until more 
-        recently.  Either way, this is, or was, accurate OSI behavior, and just entirely 
+        originally it taken out of RunUO, and not implmented on OSIs production shards until more
+        recently.  Either way, this is, or was, accurate OSI behavior, and just entirely
         removing it was incorrect.  OSI followers were distracted by being attacked well into
         AoS, at very least.
 
@@ -1766,7 +1861,10 @@ namespace Server.Mobiles
         { }
 
         public virtual void AlterSpellDamageFrom(Mobile from, ref int damage)
-        { }
+        {
+            if (m_TempDamageAbsorb > 0 && VialofArmorEssence.UnderInfluence(this))
+                damage -= damage / m_TempDamageAbsorb;
+        }
 
         public virtual void AlterSpellDamageTo(Mobile to, ref int damage)
         { }
@@ -1789,10 +1887,24 @@ namespace Server.Mobiles
                 }
             }
             #endregion
+
+            if (m_TempDamageAbsorb > 0 && VialofArmorEssence.UnderInfluence(this))
+                damage -= damage / m_TempDamageAbsorb;
         }
 
         public virtual void AlterMeleeDamageTo(Mobile to, ref int damage)
-        { }
+        {
+            if (m_TempDamageBonus > 0 && TastyTreat.UnderInfluence(this))
+                damage += damage / m_TempDamageBonus;
+        }
+        #endregion
+
+        #region SA / High Seas Tasty Treats/Vial of Armor Essense
+        private int m_TempDamageBonus = 0;
+        private int m_TempDamageAbsorb = 0;
+
+        public int TempDamageBonus { get { return m_TempDamageBonus; } set { m_TempDamageBonus = value; } }
+        public int TempDamageAbsorb { get { return m_TempDamageAbsorb; } set { m_TempDamageAbsorb = value; } }
         #endregion
 
         public virtual void CheckReflect(Mobile caster, ref bool reflect)
@@ -2492,7 +2604,7 @@ namespace Server.Mobiles
 
         public virtual bool IsHumanInTown()
         {
-            return (Body.IsHuman && Region.IsPartOf(typeof(GuardedRegion)));
+            return (Body.IsHuman && Region.IsPartOf<GuardedRegion>());
         }
 
         public virtual bool CheckGold(Mobile from, Item dropped)
@@ -4098,8 +4210,8 @@ namespace Server.Mobiles
             return true; // entered idle state
         }
 
-        /* 
-			this way, due to the huge number of locations this will have to be changed 
+        /*
+			this way, due to the huge number of locations this will have to be changed
 			Perhaps we can change this in the future when fixing game play is not the
 			major issue.
 		*/
@@ -4247,7 +4359,7 @@ namespace Server.Mobiles
                 return;
             }
 
-            if (!Body.IsHuman || Kills >= 5 || AlwaysMurderer || AlwaysAttackable || m.Kills < 5 || !m.InRange(Location, 12) ||
+            if (!Body.IsHuman || Murderer || AlwaysMurderer || AlwaysAttackable || m.Kills < 5 || !m.InRange(Location, 12) ||
                 !m.Alive)
             {
                 return;
@@ -5497,8 +5609,8 @@ namespace Server.Mobiles
         public static int[] RecipeTypes { get { return _RecipeTypes; } }
         private static int[] _RecipeTypes =
         {
-            560, 561, 562, 563, 564, 565, 566, 
-            570, 571, 572, 573, 574, 575, 576, 577, 
+            560, 561, 562, 563, 564, 565, 566,
+            570, 571, 572, 573, 574, 575, 576, 577,
             580, 581, 582, 583, 584
             //602, 603, 604,  // nutcrackers
             //800             // runic atlas
@@ -5833,7 +5945,7 @@ namespace Server.Mobiles
         {
             bool ret = base.CanBeRenamedBy(from);
 
-            if (Controlled && from == ControlMaster && !from.Region.IsPartOf(typeof(Jail)))
+            if (Controlled && from == ControlMaster && !from.Region.IsPartOf<Jail>())
             {
                 ret = true;
             }
@@ -7280,7 +7392,7 @@ namespace Server.Mobiles
         private bool m_RemoveOnSave;
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public bool RemoveOnSave { get { return m_RemoveOnSave; } set { m_RemoveOnSave = value; } }    
+        public bool RemoveOnSave { get { return m_RemoveOnSave; } set { m_RemoveOnSave = value; } }
     }
 
     public class LoyaltyTimer : Timer
@@ -7377,7 +7489,7 @@ namespace Server.Mobiles
 
                         // added lines to check if a wild creature in a house region has to be removed or not
                         if (!c.Controlled && !c.IsStabled &&
-                            ((c.Region.IsPartOf(typeof(HouseRegion)) && c.CanBeDamaged()) || (c.RemoveIfUntamed && c.Spawner == null)))
+                            ((c.Region.IsPartOf<HouseRegion>() && c.CanBeDamaged()) || (c.RemoveIfUntamed && c.Spawner == null)))
                         {
                             c.RemoveStep++;
 

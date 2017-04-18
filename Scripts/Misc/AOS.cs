@@ -258,8 +258,10 @@ namespace Server
             if (fire > 0 && totalDamage > 0)
                 SwarmContext.CheckRemove(m);
 
-            if(totalDamage > 0)
-                Spells.Mystic.SpellPlagueSpell.OnMobileDamaged(m);
+            if (totalDamage > 0)
+            {
+                Spells.Mysticism.SleepSpell.OnDamage(m);
+            }
             #endregion
 
             #region Skill Mastery Spells
@@ -528,7 +530,7 @@ namespace Server
                     value -= 30;
 
                 #region SA
-                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mystic.StoneFormSpell)))
+                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mysticism.StoneFormSpell)))
                     value -= 10;
 
                 if (m is PlayerMobile && m.Race == Race.Gargoyle)
@@ -586,10 +588,10 @@ namespace Server
                 #endregion
 
                 #region SA
-                if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
+                if (Spells.Mysticism.SleepSpell.IsUnderSleepEffects(m))
                     value -= 2;
 
-                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mystic.StoneFormSpell)))
+                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mysticism.StoneFormSpell)))
                     value -= 2;
                 #endregion
             }
@@ -601,7 +603,7 @@ namespace Server
                 value -= ThunderstormSpell.GetCastRecoveryMalus(m);
 
                 #region SA
-                if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
+                if (Spells.Mysticism.SleepSpell.IsUnderSleepEffects(m))
                     value -= 3;
                 #endregion
             }
@@ -638,10 +640,10 @@ namespace Server
                 #endregion
 
                 #region SA
-                if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
+                if (Spells.Mysticism.SleepSpell.IsUnderSleepEffects(m))
                     value -= 45;
 
-                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mystic.StoneFormSpell)))
+                if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mysticism.StoneFormSpell)))
                     value -= 10;
 
                 if (MudPie.IsUnderEffects(m))
@@ -678,7 +680,7 @@ namespace Server
                 #endregion
 
                 #region SA
-                if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
+                if (Spells.Mysticism.SleepSpell.IsUnderSleepEffects(m))
                     value -= 45;
 
                 if (m.Race == Race.Gargoyle)
@@ -1232,7 +1234,6 @@ namespace Server
         HitManaDrain = 0x20000000,
         SplinteringWeapon = 0x40000000,
         ReactiveParalyze =  0x80000000,
-        MysticWeapon =      0x100000000,
     }
 
     public sealed class AosWeaponAttributes : BaseAttributes
@@ -1771,19 +1772,6 @@ namespace Server
             }
         }
         #endregion
-
-        [CommandProperty(AccessLevel.GameMaster)]
-        public int MysticWeapon
-        {
-            get
-            {
-                return this[AosWeaponAttribute.MysticWeapon];
-            }
-            set
-            {
-                this[AosWeaponAttribute.MysticWeapon] = value;
-            }
-        }
     }
 
     [Flags]
@@ -1793,6 +1781,7 @@ namespace Server
         HitSwarm = 0x00000002,
         HitSparks = 0x00000004,
         Bane = 0x00000008,
+        MysticWeapon = 0x00000010
     }
 
     public sealed class ExtendedWeaponAttributes : BaseAttributes
@@ -1906,6 +1895,19 @@ namespace Server
             set
             {
                 this[ExtendedWeaponAttribute.Bane] = value;
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int MysticWeapon
+        {
+            get
+            {
+                return this[ExtendedWeaponAttribute.MysticWeapon];
+            }
+            set
+            {
+                this[ExtendedWeaponAttribute.MysticWeapon] = value;
             }
         }
     }
@@ -2264,12 +2266,25 @@ namespace Server
             }
             if (acontext != null)
             {
-                int i;
-                for (i = 0; i < AnimalForm.Entries.Length; ++i)
-                    if (AnimalForm.Entries[i].Type == acontext.Type)
-                        break;
-                if (m.Skills[SkillName.Ninjitsu].Value < AnimalForm.Entries[i].ReqSkill)
+                if (acontext.Type == typeof(WildWhiteTiger) && m.Skills[SkillName.Ninjitsu].Value < 90)
+                {
                     AnimalForm.RemoveContext(m, true);
+                }
+                else
+                {
+                    int i;
+
+                    for (i = 0; i < AnimalForm.Entries.Length; ++i)
+                    {
+                        if (AnimalForm.Entries[i].Type == acontext.Type)
+                            break;
+                    }
+
+                    if (i < AnimalForm.Entries.Length && m.Skills[SkillName.Ninjitsu].Value < AnimalForm.Entries[i].ReqSkill)
+                    {
+                        AnimalForm.RemoveContext(m, true);
+                    }
+                }
             }
             if (!m.CanBeginAction(typeof(PolymorphSpell)) && m.Skills[SkillName.Magery].Value < 66.1)
             {

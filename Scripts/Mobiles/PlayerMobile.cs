@@ -247,8 +247,10 @@ namespace Server.Mobiles
 		private List<Mobile> m_AllFollowers;
 		private List<Mobile> m_RecentlyReported;
 
-		#region Guantlet Points
-		private double m_GauntletPoints;
+        public bool UseSummoningRite { get; set; }
+
+        #region Guantlet Points
+        private double m_GauntletPoints;
 
 		[CommandProperty(AccessLevel.Administrator)]
 		public double GauntletPoints { get { return m_GauntletPoints; } set { m_GauntletPoints = value; } }
@@ -786,7 +788,7 @@ namespace Server.Mobiles
 			EventSink.Disconnected += EventSink_Disconnected;
 
             #region Enchanced Client
-            EventSink.TargetedSkill += Targeted_Skill;  
+            EventSink.TargetedSkill += Targeted_Skill;
             EventSink.TargetedItemUse += Targeted_Item;
             #endregion
 
@@ -889,7 +891,7 @@ namespace Server.Mobiles
             int max = base.GetMaxResistance(type);
 
             #region SA
-            max += Spells.Mystic.StoneFormSpell.GetMaxResistMod(this);
+            max += Spells.Mysticism.StoneFormSpell.GetMaxResistMod(this);
             #endregion
 
             max += BaseArmor.GetRefinedResist(this, type);
@@ -946,7 +948,7 @@ namespace Server.Mobiles
                 }
 
                 bool setitem = item is ISetItem;
-                
+
                 Resistances[0] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Physical) : item.PhysicalResistance;
                 Resistances[1] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Fire) : item.FireResistance;
                 Resistances[2] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Cold) : item.ColdResistance;
@@ -1140,7 +1142,14 @@ namespace Server.Mobiles
 			{
 				((PlayerMobile)from).ClaimAutoStabledPets();
 			}
-		}
+
+            if (((from.Map == Map.Trammel && from.Region.IsPartOf("Blackthorn Castle")) || from.Region.IsPartOf("Ver Lor Reg")) && from.Player && from.AccessLevel == AccessLevel.Player && from.CharacterOut)
+            {
+                StormLevelGump menu = new StormLevelGump(from);
+                menu.BeginClose();
+                from.SendGump(menu);
+            }
+        }
 
 		private bool m_NoDeltaRecursion;
 
@@ -1478,7 +1487,8 @@ namespace Server.Mobiles
 				#endregion
 
 				pm.BedrollLogout = false;
-				pm.LastOnline = DateTime.UtcNow;
+                pm.BlanketOfDarknessLogout = false;
+                pm.LastOnline = DateTime.UtcNow;
 			}
 
 			DisguiseTimers.StartTimer(e.Mobile);
@@ -2137,7 +2147,7 @@ namespace Server.Mobiles
 						list.Add(new CallbackEntry(6204, GetVendor));
 					}
 
-					if (house.IsAosRules && !Region.IsPartOf(typeof(SafeZone))) // Dueling
+					if (house.IsAosRules && !Region.IsPartOf<SafeZone>()) // Dueling
 					{
 						list.Add(new CallbackEntry(6207, LeaveHouse));
 					}
@@ -3054,7 +3064,7 @@ namespace Server.Mobiles
 			}
 
 			#region Dueling
-			if (Region.IsPartOf(typeof(SafeZone)) && m is PlayerMobile)
+			if (Region.IsPartOf<SafeZone>() && m is PlayerMobile)
 			{
 				PlayerMobile pm = (PlayerMobile)m;
 
@@ -3303,7 +3313,7 @@ namespace Server.Mobiles
 			}
 			return false;
 		}
-		
+
 		public override bool Criminal
         	{
             		get
@@ -3328,7 +3338,7 @@ namespace Server.Mobiles
 			{
 				state.CancelAllTrades();
 			}
-			
+
 			if (Criminal)
                 		BuffInfo.RemoveBuff(this, BuffIcon.CriminalStatus);
 
@@ -3492,7 +3502,7 @@ namespace Server.Mobiles
 					killer = ((BaseCreature)m).ControlMaster as PlayerMobile;
 				}
 			}
-			
+
 			if (m_NonAutoreinsuredItems > 0)
 			{
 				SendLocalizedMessage(1061115);
@@ -3543,7 +3553,7 @@ namespace Server.Mobiles
 			}
 
 			if(killer != null &&
-				Kills >= 5 &&
+				Murderer &&
 				DateTime.UtcNow >= killer.m_NextJustAward)
 			{
 				// This scales 700.0 skill points to 1000 valor points
@@ -3673,8 +3683,6 @@ namespace Server.Mobiles
 		private TimeSpan m_ShortTermElapse;
 		private TimeSpan m_LongTermElapse;
 		private DateTime m_SessionStart;
-		private DateTime m_NextSmithBulkOrder;
-		private DateTime m_NextTailorBulkOrder;
 		private DateTime m_SavagePaintExpiration;
 		private SkillName m_Learning = (SkillName)(-1);
 
@@ -3702,23 +3710,11 @@ namespace Server.Mobiles
 		{
 			get
 			{
-				TimeSpan ts = m_NextSmithBulkOrder - DateTime.UtcNow;
-
-				if (ts < TimeSpan.Zero)
-				{
-					ts = TimeSpan.Zero;
-				}
-
-				return ts;
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Smith, this);
 			}
 			set
 			{
-				try
-				{
-					m_NextSmithBulkOrder = DateTime.UtcNow + value;
-				}
-				catch
-				{ }
+                BulkOrderSystem.SetNextBulkOrder(BODType.Smith, this, value);
 			}
 		}
 
@@ -3727,25 +3723,91 @@ namespace Server.Mobiles
 		{
 			get
 			{
-				TimeSpan ts = m_NextTailorBulkOrder - DateTime.UtcNow;
-
-				if (ts < TimeSpan.Zero)
-				{
-					ts = TimeSpan.Zero;
-				}
-
-				return ts;
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Tailor, this);
 			}
 			set
 			{
-				try
-				{
-					m_NextTailorBulkOrder = DateTime.UtcNow + value;
-				}
-				catch
-				{ }
+                BulkOrderSystem.SetNextBulkOrder(BODType.Tailor, this, value);
 			}
 		}
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public TimeSpan NextAlchemyBulkOrder
+        {
+            get
+            {
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Alchemy, this);
+            }
+            set
+            {
+                BulkOrderSystem.SetNextBulkOrder(BODType.Alchemy, this, value);
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public TimeSpan NextInscriptionBulkOrder
+        {
+            get
+            {
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Inscription, this);
+            }
+            set
+            {
+                BulkOrderSystem.SetNextBulkOrder(BODType.Inscription, this, value);
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public TimeSpan NextTinkeringBulkOrder
+        {
+            get
+            {
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Tinkering, this);
+            }
+            set
+            {
+                BulkOrderSystem.SetNextBulkOrder(BODType.Tinkering, this, value);
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public TimeSpan NextFletchingBulkOrder
+        {
+            get
+            {
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Fletching, this);
+            }
+            set
+            {
+                BulkOrderSystem.SetNextBulkOrder(BODType.Fletching, this, value);
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public TimeSpan NextCarpentryBulkOrder
+        {
+            get
+            {
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Carpentry, this);
+            }
+            set
+            {
+                BulkOrderSystem.SetNextBulkOrder(BODType.Carpentry, this, value);
+            }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public TimeSpan NextCookingBulkOrder
+        {
+            get
+            {
+                return BulkOrderSystem.GetNextBulkOrder(BODType.Cooking, this);
+            }
+            set
+            {
+                BulkOrderSystem.SetNextBulkOrder(BODType.Cooking, this, value);
+            }
+        }
 
 		[CommandProperty(AccessLevel.GameMaster)]
 		public DateTime LastEscortTime { get; set; }
@@ -3772,7 +3834,7 @@ namespace Server.Mobiles
 			m_AntiMacroTable = new Hashtable();
 			m_RecentlyReported = new List<Mobile>();
 
-			m_BOBFilter = new BOBFilter();
+			//m_BOBFilter = new BOBFilter();
 
 			m_GameTime = TimeSpan.Zero;
 			m_ShortTermElapse = TimeSpan.FromHours(8.0);
@@ -4039,9 +4101,13 @@ namespace Server.Mobiles
 			SetHairMods(-1, -1);
 		}
 
-		private BOBFilter m_BOBFilter;
-
-		public BOBFilter BOBFilter { get { return m_BOBFilter; } }
+		public BOBFilter BOBFilter
+        {
+            get
+            {
+                return BulkOrderSystem.GetBOBFilter(this);
+            }
+        }
 
 		public override void Deserialize(GenericReader reader)
 		{
@@ -4050,6 +4116,8 @@ namespace Server.Mobiles
 
 			switch (version)
 			{
+                    // Version 34 - new BOD System
+                case 34:
                 case 33:
                     {
                         m_ExploringTheDeepQuest = (ExploringTheDeepQuestChain)reader.ReadInt();
@@ -4253,7 +4321,8 @@ namespace Server.Mobiles
 				case 13: // just removed m_PayedInsurance list
 				case 12:
 					{
-						m_BOBFilter = new BOBFilter(reader);
+                        if(version < 34)
+						    BulkOrderSystem.SetBOBFilter(this, new BOBFilter(reader));
 						goto case 11;
 					}
 				case 11:
@@ -4308,12 +4377,14 @@ namespace Server.Mobiles
 					}
 				case 6:
 					{
-						NextTailorBulkOrder = reader.ReadTimeSpan();
+                        if(version < 34)
+						    reader.ReadTimeSpan();
 						goto case 5;
 					}
 				case 5:
 					{
-						NextSmithBulkOrder = reader.ReadTimeSpan();
+                        if(version < 34)
+						    reader.ReadTimeSpan();
 						goto case 4;
 					}
 				case 4:
@@ -4362,13 +4433,6 @@ namespace Server.Mobiles
 				m_RecentlyReported = new List<Mobile>();
 			}
 
-			/*#region QueensLoyaltySystem
-			if (version < 29)
-			{
-				m_Exp = 0;
-			}
-			#endregion*/
-
 			#region Mondain's Legacy
 			if (m_Quests == null)
 			{
@@ -4410,11 +4474,6 @@ namespace Server.Mobiles
 			if (m_JusticeProtectors == null)
 			{
 				m_JusticeProtectors = new List<Mobile>();
-			}
-
-			if (m_BOBFilter == null)
-			{
-				m_BOBFilter = new BOBFilter();
 			}
 
 			if (m_GuildRank == null)
@@ -4480,7 +4539,7 @@ namespace Server.Mobiles
 
 			base.Serialize(writer);
 
-			writer.Write(33); // version
+			writer.Write(34); // version
 
             writer.Write((int)m_ExploringTheDeepQuest);
 
@@ -4609,8 +4668,6 @@ namespace Server.Mobiles
 				writer.WriteDeltaTime(m_NextCompassionDay);
 			}
 
-			m_BOBFilter.Serialize(writer);
-
 			bool useMods = (m_HairModID != -1 || m_BeardModID != -1);
 
 			writer.Write(useMods);
@@ -4630,10 +4687,6 @@ namespace Server.Mobiles
 			writer.Write(m_NpcGuildGameTime);
 
 			writer.Write(m_PermaFlags, true);
-
-			writer.Write(NextTailorBulkOrder);
-
-			writer.Write(NextSmithBulkOrder);
 
 			writer.WriteDeltaTime(m_LastJusticeLoss);
 			writer.Write(m_JusticeProtectors, true);
@@ -5026,8 +5079,9 @@ namespace Server.Mobiles
 		}
 
 		public bool BedrollLogout { get; set; }
+        public bool BlanketOfDarknessLogout { get; set; }
 
-		[CommandProperty(AccessLevel.GameMaster)]
+        [CommandProperty(AccessLevel.GameMaster)]
 		public override bool Paralyzed
 		{
 			get { return base.Paralyzed; }
@@ -5045,27 +5099,6 @@ namespace Server.Mobiles
 				}
 			}
 		}
-
-		#region Mysticism
-		[CommandProperty(AccessLevel.GameMaster)]
-		public override bool Asleep
-		{
-			get { return base.Asleep; }
-			set
-			{
-				base.Asleep = value;
-
-				if (value)
-				{
-					AddBuff(new BuffInfo(BuffIcon.Sleep, 1080139)); //Paralyze/You are frozen and can not move
-				}
-				else
-				{
-					RemoveBuff(BuffIcon.Sleep);
-				}
-			}
-		}
-		#endregion
 
 		#region Ethics
 		private Player m_EthicPlayer;
@@ -5225,11 +5258,11 @@ namespace Server.Mobiles
                     if (m_CollectionTitles[num] is int && !silent)
                     {
                         SendLocalizedMessage(1074008, "#" + (int)m_CollectionTitles[num]);
-                        // You change your Reward Title to "~1_TITLE~".	
+                        // You change your Reward Title to "~1_TITLE~".
                     }
                     else if (m_CollectionTitles[num] is string && !silent)
                     {
-                        SendLocalizedMessage(1074008, (string)m_CollectionTitles[num]); // You change your Reward Title to "~1_TITLE~".	
+                        SendLocalizedMessage(1074008, (string)m_CollectionTitles[num]); // You change your Reward Title to "~1_TITLE~".
                     }
                 }
                 else if (!silent)
@@ -5588,63 +5621,6 @@ namespace Server.Mobiles
 		}
 		#endregion
 
-		#region Enemy of One
-		private Type m_EnemyOfOneType;
-
-		public Type EnemyOfOneType
-		{
-			get { return m_EnemyOfOneType; }
-			set
-			{
-				Type oldType = m_EnemyOfOneType;
-				Type newType = value;
-
-				if (oldType == newType)
-				{
-					return;
-				}
-
-				m_EnemyOfOneType = value;
-
-                //TODO: Figure an efficient way to naming the creature, pluralized!!!
-                /*if (m_EnemyOfOneType != null)
-                {
-                    BuffInfo.AddBuff(this.Caster, new BuffInfo(BuffIcon.EnemyOfOne, 1075653, 1075654, TimeSpan.FromMinutes(delay), this.Caster, 
-                        String.Format("{0}\t{1}\t{2}\t{3}", "50", )));
-                }*/
-
-				DeltaEnemies(oldType, newType);
-			}
-		}
-
-		public bool WaitingForEnemy { get; set; }
-
-		private void DeltaEnemies(Type oldType, Type newType)
-		{
-			foreach (Mobile m in GetMobilesInRange(18))
-			{
-				Type t = m.GetType();
-
-				if (t == oldType || t == newType)
-				{
-					NetState ns = NetState;
-
-					if (ns != null)
-					{
-						if (ns.StygianAbyss)
-						{
-							ns.Send(new MobileMoving(m, Notoriety.Compute(this, m)));
-						}
-						else
-						{
-							ns.Send(new MobileMovingOld(m, Notoriety.Compute(this, m)));
-						}
-					}
-				}
-			}
-		}
-		#endregion
-
 		#region Hair and beard mods
 		private int m_HairModID = -1, m_HairModHue;
 		private int m_BeardModID = -1, m_BeardModHue;
@@ -5827,7 +5803,7 @@ namespace Server.Mobiles
 
 		public override TimeSpan GetLogoutDelay()
 		{
-			if (Young || BedrollLogout || TestCenter.Enabled)
+			if (Young || BedrollLogout || BlanketOfDarknessLogout || TestCenter.Enabled)
 			{
 				return TimeSpan.Zero;
 			}
@@ -5905,7 +5881,7 @@ namespace Server.Mobiles
 
 		public bool YoungDeathTeleport()
 		{
-			if (Region.IsPartOf(typeof(Jail)) || Region.IsPartOf("Samurai start location") ||
+			if (Region.IsPartOf<Jail>() || Region.IsPartOf("Samurai start location") ||
 				Region.IsPartOf("Ninja start location") || Region.IsPartOf("Ninja cave"))
 			{
 				return false;
@@ -6507,9 +6483,11 @@ namespace Server.Mobiles
         public ExploringTheDeepQuestChain ExploringTheDeepQuest { get { return m_ExploringTheDeepQuest; } set { m_ExploringTheDeepQuest = value; } }
         #endregion
 
+        public static bool PetAutoStable { get { return Core.SE; } }
+
         public void AutoStablePets()
 		{
-			if (Core.SE && AllFollowers.Count > 0)
+			if (PetAutoStable && AllFollowers.Count > 0)
 			{
 				for (int i = m_AllFollowers.Count - 1; i >= 0; --i)
 				{
@@ -6566,7 +6544,7 @@ namespace Server.Mobiles
 
 		public void ClaimAutoStabledPets()
 		{
-			if (!Core.SE || m_AutoStabled.Count <= 0)
+			if (!PetAutoStable || !this.Region.AllowAutoClaim(this) || m_AutoStabled.Count <= 0)
 			{
 				return;
 			}

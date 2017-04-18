@@ -331,27 +331,28 @@ namespace Server.Mobiles
 
 			if (order == OrderType.Attack)
 			{
-				if (target is BaseCreature && ((BaseCreature)target).IsScaryToPets && m_Mobile.IsScaredOfScaryThings)
+				if (target is BaseCreature)
 				{
-					m_Mobile.SayTo(from, "Your pet refuses to attack this creature!");
-					return;
-				}
+					BaseCreature bc = (BaseCreature)target;
 
-				if ((SolenHelper.CheckRedFriendship(from) &&
-					 (target is RedSolenInfiltratorQueen || target is RedSolenInfiltratorWarrior || target is RedSolenQueen ||
-					  target is RedSolenWarrior || target is RedSolenWorker)) ||
-					(SolenHelper.CheckBlackFriendship(from) &&
-					 (target is BlackSolenInfiltratorQueen || target is BlackSolenInfiltratorWarrior || target is BlackSolenQueen ||
-					  target is BlackSolenWarrior || target is BlackSolenWorker)))
-				{
-					from.SendAsciiMessage("You can not force your pet to attack a creature you are protected from.");
-					return;
-				}
+					if (bc.IsScaryToPets && m_Mobile.IsScaredOfScaryThings)
+					{
+						m_Mobile.SayTo(from, "Your pet refuses to attack this creature!");
+						return;
+					}
 
-				if (target is BaseFactionGuard)
-				{
-					m_Mobile.SayTo(from, "Your pet refuses to attack the guard.");
-					return;
+					if ((bc is IBlackSolen && SolenHelper.CheckBlackFriendship(from)) ||
+						(bc is IRedSolen && SolenHelper.CheckRedFriendship(from)))
+					{
+						from.SendAsciiMessage("You can not force your pet to attack a creature you are protected from.");
+						return;
+					}
+
+					if (bc is BaseFactionGuard)
+					{
+						m_Mobile.SayTo(from, "Your pet refuses to attack the guard.");
+						return;
+					}
 				}
 			}
 
@@ -2313,10 +2314,18 @@ namespace Server.Mobiles
 				return MoveResult.BadState;
 			}
 
+			int delay = (int)(TransformMoveDelay(m_Mobile.CurrentSpeed) * 1000);
+
+			var mounted = m_Mobile.Mounted || m_Mobile.Flying;
+			var running = (mounted && delay <= Mobile.RunMount) || (!mounted && delay <= Mobile.RunFoot);
+
+			if (running)
+			{
+				d |= Direction.Running;
+			}
+            
 			// This makes them always move one step, never any direction changes
 			m_Mobile.Direction = d;
-
-			int delay = (int)(TransformMoveDelay(m_Mobile.CurrentSpeed) * 1000);
             
 			m_NextMove += delay;
 
@@ -2897,91 +2906,75 @@ namespace Server.Mobiles
 							{
 								continue;
 							}
-
-							//Ignore anyone under EtherealVoyage
-							if (TransformationSpellHelper.UnderTransformation(m, typeof(EtherealVoyageSpell)))
-							{
-								continue;
-							}
-
-							// Ignore players with activated honor
-							if (m is PlayerMobile && ((PlayerMobile)m).HonorActive && !(m_Mobile.Combatant == m))
-							{
-								continue;
-							}
-
+/*
 							// Xmlspawner faction check
 							// Ignore mob faction ranked players, more highly more often
-							//if (!Server.Engines.XmlSpawner2.XmlMobFactions.CheckAcquire(this.m_Mobile, m))
-							//continue;
-
-							// We want a faction/ethic enemy
-							bool bValid = (m_Mobile.GetFactionAllegiance(m) == BaseCreature.Allegiance.Enemy ||
-										  m_Mobile.GetEthicAllegiance(m) == BaseCreature.Allegiance.Enemy);
-
-							BaseCreature c = m as BaseCreature;
-
-							// We want a special FightMode enemy
-							if (!bValid)
+							if (!Server.Engines.XmlSpawner2.XmlMobFactions.CheckAcquire(this.m_Mobile, m))
 							{
-								// We want a karma enemy
-								if (acqType == FightMode.Evil)
-								{
-									if (c != null && c.Controlled && c.ControlMaster != null)
-									{
-										bValid = (c.ControlMaster.Karma < 0);
-									}
-									else
-									{
-										bValid = (m.Karma < 0);
-									}
-								}
-								// We want a karma enemy
-								else if (acqType == FightMode.Good)
-								{
-									if (c != null && c.Controlled && c.ControlMaster != null)
-									{
-										bValid = (c.ControlMaster.Karma > 0);
-									}
-									else
-									{
-										bValid = (m.Karma > 0);
-									}
-                                }
-                                else if (acqType == FightMode.Enemy)
-                                {
-                                    if (!m_Mobile.IsEnemy(m))
-                                        continue;
-                                }
-                                else if (acqType == FightMode.Aggressor)
-                                {
-                                    bValid = m_Mobile.Aggressors.FirstOrDefault(agg => agg.Attacker == m) != null;
-                                }
+								continue;
 							}
-
-							// Don't ignore valid targets
-							if (!bValid)
+*/
+							if (acqType == FightMode.Aggressor || acqType == FightMode.Evil || acqType == FightMode.Good
+                                || (m is BaseCreature && ((BaseCreature)m).Summoned))
 							{
-								// Ignore anyone if we are a Passive FightMode
-								if (acqType == FightMode.Good || acqType == FightMode.Evil || acqType == FightMode.Aggressor)
+
+								//Ignore anyone under EtherealVoyage
+								if (TransformationSpellHelper.UnderTransformation(m, typeof(EtherealVoyageSpell)))
 								{
 									continue;
 								}
-								// Ignore anyone if they are an Uncontrolled Summon
-								else if (c != null && c.Summoned && !(c.GetMaster() is PlayerMobile))
+
+								// Ignore players with activated honor
+								if (m is PlayerMobile && ((PlayerMobile)m).HonorActive && !(m_Mobile.Combatant == m))
 								{
 									continue;
 								}
-								// We want an enemy (We are an Aggressive FightMode)
-								else if (m_Mobile.IsEnemy(m))
+
+								// We want a faction/ethic enemy
+								bool bValid = (m_Mobile.GetFactionAllegiance(m) == BaseCreature.Allegiance.Enemy ||
+											  m_Mobile.GetEthicAllegiance(m) == BaseCreature.Allegiance.Enemy);
+
+								BaseCreature c = m as BaseCreature;
+
+								// We want a special FightMode enemy
+								if (!bValid)
 								{
-									bValid = true;
+									// We want a karma enemy
+									if (acqType == FightMode.Evil)
+									{
+										if (c != null && c.Controlled && c.ControlMaster != null)
+										{
+											bValid = (c.ControlMaster.Karma < 0);
+										}
+										else
+										{
+											bValid = (m.Karma < 0);
+										}
+									}
+									// We want a karma enemy
+									else if (acqType == FightMode.Good)
+									{
+										if (c != null && c.Controlled && c.ControlMaster != null)
+										{
+											bValid = (c.ControlMaster.Karma > 0);
+										}
+										else
+										{
+											bValid = (m.Karma > 0);
+										}
+									}
+
+									// Ignore Invalid targets
+									if (!bValid)
+									{
+										continue;
+									}
 								}
- 								// Ignore anyone else
-								else
-								{
-									continue;
-								}
+							}
+							// Ignore any non-enemy (We are an Aggressive FightMode)
+							else if (!m_Mobile.IsEnemy(m))
+							{
+								continue;
 							}
 						}
 					}
@@ -3016,12 +3009,12 @@ namespace Server.Mobiles
 			{
 				for (int a = 0; a < count; ++a)
 				{
-					if (a < m_Mobile.Aggressed.Count && m_Mobile.Aggressed[a].Attacker == from)
+					if (a < m_Mobile.Aggressed.Count && m_Mobile.Aggressed[a].Defender == from)
 					{
 						return true;
 					}
 
-					if (a < m_Mobile.Aggressors.Count && m_Mobile.Aggressors[a].Defender == from)
+					if (a < m_Mobile.Aggressors.Count && m_Mobile.Aggressors[a].Attacker == from)
 					{
 						return true;
 					}

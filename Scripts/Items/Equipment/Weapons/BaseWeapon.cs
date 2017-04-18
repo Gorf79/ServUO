@@ -94,7 +94,7 @@ namespace Server.Items
         }
 
 		/* Weapon internals work differently now (Mar 13 2003)
-        * 
+        *
         * The attributes defined below default to -1.
         * If the value is -1, the corresponding virtual 'Aos/Old' property is used.
         * If not, the attribute value itself is used. Here's the list:
@@ -133,9 +133,6 @@ namespace Server.Items
 		private bool m_PlayerConstructed;
 
 		private bool m_Cursed; // Is this weapon cursed via Curse Weapon necromancer spell? Temporary; not serialized.
-
-		private bool m_Consecrated;
-					 // Is this weapon blessed via Consecrate Weapon paladin ability? Temporary; not serialized.
 
 		#region Mondain's Legacy
 		private bool m_Immolating; // Is this weapon blessed via Immolating Weapon arcanists spell? Temporary; not serialized.
@@ -312,8 +309,8 @@ namespace Server.Items
 		[CommandProperty(AccessLevel.GameMaster)]
 		public bool Cursed { get { return m_Cursed; } set { m_Cursed = value; } }
 
-		[CommandProperty(AccessLevel.GameMaster)]
-		public bool Consecrated { get { return m_Consecrated; } set { m_Consecrated = value; } }
+        [CommandProperty(AccessLevel.GameMaster)]
+        public ConsecratedWeaponContext ConsecratedContext { get; set; }
 
 		#region Mondain's Legacy
 		[CommandProperty(AccessLevel.GameMaster)]
@@ -637,16 +634,16 @@ namespace Server.Items
         [CommandProperty(AccessLevel.GameMaster)]
         public bool IsImbued
         {
-            get 
+            get
             {
-                if (this.TimesImbued >= 1 && !m_IsImbued)
+                if (TimesImbued >= 1 && !m_IsImbued)
                     m_IsImbued = true;
 
-                return m_IsImbued; 
+                return m_IsImbued;
             }
-            set 
+            set
             {
-                if (this.TimesImbued >= 1)
+                if (TimesImbued >= 1)
                     m_IsImbued = true;
                 else
                     m_IsImbued = value; InvalidateProperties();
@@ -699,10 +696,6 @@ namespace Server.Items
             set { m_ReforgedSuffix = value; InvalidateProperties(); }
         }
         #endregion
-
-
-        public double ConsecrateProcChance { get; set; }
-        public double ConsecrateDamageBonus { get; set; }
         #endregion
 
         public override void GetContextMenuEntries(Mobile from, List<ContextMenuEntry> list)
@@ -966,7 +959,7 @@ namespace Server.Items
 			#region Stygian Abyss
 			if (from.Race == Race.Gargoyle && !CanBeWornByGargoyles && from.IsPlayer())
 			{
-				from.SendLocalizedMessage(1111708); // Gargoyles can't wear this.
+				from.SendLocalizedMessage(1111708); // Gargoyles can't wear 
 				return false;
 			}
 			#endregion
@@ -975,18 +968,18 @@ namespace Server.Items
 			{
 				if (RequiredRace == Race.Elf)
 				{
-					from.SendLocalizedMessage(1072203); // Only Elves may use this.
+					from.SendLocalizedMessage(1072203); // Only Elves may use 
 				}
 					#region SA
 				else if (RequiredRace == Race.Gargoyle)
 				{
-					from.SendLocalizedMessage(1111707); // Only gargoyles can wear this.
+					from.SendLocalizedMessage(1111707); // Only gargoyles can wear 
 				}
 					#endregion
 
 				else
 				{
-					from.SendMessage("Only {0} may use this.", RequiredRace.PluralName);
+					from.SendMessage("Only {0} may use ", RequiredRace.PluralName);
 				}
 
 				return false;
@@ -1083,9 +1076,10 @@ namespace Server.Items
 				from.AddSkillMod(m_MageMod);
 			}
 
-            if (Core.TOL && m_AosWeaponAttributes.MysticWeapon != 0 && m_AosWeaponAttributes.MysticWeapon != 30)
+            if (Core.TOL)
             {
-                AddMysticMod(from);
+                if ((m_ExtendedWeaponAttributes.MysticWeapon != 0 && m_ExtendedWeaponAttributes.MysticWeapon != 30) || Enhancement.GetValue(from, ExtendedWeaponAttribute.MysticWeapon) > 0)
+                    AddMysticMod(from);
             }
 
 			XmlAttach.CheckOnEquip(this, from);
@@ -1160,7 +1154,7 @@ namespace Server.Items
 				}
 
 				ImmolatingWeaponSpell.StopImmolating(this);
-                Spells.Mystic.EnchantSpell.OnWeaponRemoved(this, m);
+                Spells.Mysticism.EnchantSpell.OnWeaponRemoved(this, m);
 
 				m.CheckStatTimers();
 
@@ -1173,7 +1167,7 @@ namespace Server.Items
 
                 //Skill Masteries
                 SkillMasterySpell.OnWeaponRemoved(m, this);
-                RemoveMysticMod();
+                //RemoveMysticMod();
 
 				#region Mondain's Legacy Sets
 				if (IsSetItem && m_SetEquipped)
@@ -1189,7 +1183,12 @@ namespace Server.Items
             if (m_MysticMod != null)
                 m_MysticMod.Remove();
 
-            m_MysticMod = new DefaultSkillMod(SkillName.Mysticism, true, -30 + m_AosWeaponAttributes.MysticWeapon);
+            int value = m_ExtendedWeaponAttributes.MysticWeapon;
+
+            if (Enhancement.GetValue(from, ExtendedWeaponAttribute.MysticWeapon) > value)
+                value = Enhancement.GetValue(from, ExtendedWeaponAttribute.MysticWeapon);
+
+            m_MysticMod = new DefaultSkillMod(SkillName.Mysticism, true, -30 + value);
             from.AddSkillMod(m_MysticMod);
         }
 
@@ -1477,7 +1476,7 @@ namespace Server.Items
 
 				delayInSeconds = Math.Floor(40000.0 / v) * 0.5;
 
-				// Maximum swing rate capped at one swing per second 
+				// Maximum swing rate capped at one swing per second
 				// OSI dev said that it has and is supposed to be 1.25
 				if (delayInSeconds < 1.25)
 				{
@@ -2081,7 +2080,7 @@ namespace Server.Items
             {
                 GetDamageTypes(attacker, out phys, out fire, out cold, out pois, out nrgy, out chaos, out direct);
 
-                if (m_Consecrated)
+                if (!OnslaughtSpell.HasOnslaught(attacker, defender) && ConsecratedContext != null && ConsecratedContext.ConsecrateProcChance >= Utility.Random(100))
                 {
                     phys = damageable.PhysicalResistance;
                     fire = damageable.FireResistance;
@@ -2147,7 +2146,7 @@ namespace Server.Items
             double chance = NegativeAttributes.Antique > 0 ? 5 : 0;
             bool acidicTarget = MaxRange <= 1 && (defender is Slime || defender is ToxicElemental || defender is CorrosiveSlime);
 
-            if ((m_AosAttributes.SpellChanneling == 0 || MaxRange > 1) && 
+            if ((m_AosAttributes.SpellChanneling == 0 || MaxRange > 1) &&
                 (acidicTarget || (defender != null && splintering) || Utility.Random(250) <= chance))    // Stratics says 50% chance, seems more like 4%..
             {
                 if (MaxRange <= 1 && acidicTarget)
@@ -2164,16 +2163,23 @@ namespace Server.Items
                 {
                     if (m_MaxHits > 0)
                     {
-                        if (this.m_Hits >= 1)
+                        if (m_Hits >= 1)
                         {
-                            HitPoints--;
+                            if (splintering)
+                            {
+                                HitPoints = Math.Max(0, HitPoints - 10);
+                            }
+                            else
+                            {
+                                HitPoints--;
+                            }
                         }
-                        else if (this.m_MaxHits > 0)
+                        else if (m_MaxHits > 0)
                         {
-                            this.MaxHitPoints--;
+                            MaxHitPoints--;
 
-                            if (this.Parent is Mobile)
-                                ((Mobile)this.Parent).LocalOverheadMessage(MessageType.Regular, 0x3B2, 1061121); // Your equipment is severely damaged.
+                            if (Parent is Mobile)
+                                ((Mobile)Parent).LocalOverheadMessage(MessageType.Regular, 0x3B2, 1061121); // Your equipment is severely damaged.
 
                             if (m_MaxHits == 0)
                                 Delete();
@@ -2222,13 +2228,9 @@ namespace Server.Items
 				percentageBonus += (int)(move.GetDamageScalar(attacker, defender) * 100) - 100;
 			}
 
-            if (m_Consecrated)
+            if (ConsecratedContext != null)
             {
-                if (Utility.RandomDouble() <= ConsecrateProcChance / 100)
-                {
-                    if (ConsecrateDamageBonus > 0)
-                        damageBonus *= 1 + ConsecrateDamageBonus / 100;
-                }
+                percentageBonus += ConsecratedContext.ConsecrateDamageBonus;
             }
 
             percentageBonus += (int)(damageBonus * 100) - 100;
@@ -2274,38 +2276,30 @@ namespace Server.Items
                 defender.FixedEffect(0x37B9, 10, 5);
             }
 
+			#region Enemy of One
 			if (!attacker.Player)
 			{
-				if (defender is PlayerMobile)
-				{
-					PlayerMobile pm = (PlayerMobile)defender;
+				var enemyOfOneContext = EnemyOfOneSpell.GetContext(defender);
 
-					if (pm.EnemyOfOneType != null && pm.EnemyOfOneType != attacker.GetType())
-					{
-						percentageBonus += 100;
-					}
-				}
+				if (enemyOfOneContext != null && !enemyOfOneContext.IsWaitingForEnemy && !enemyOfOneContext.IsEnemy(attacker))
+					percentageBonus += 100;
 			}
 			else if (!defender.Player)
 			{
-				if (attacker is PlayerMobile)
+				var enemyOfOneContext = EnemyOfOneSpell.GetContext(attacker);
+
+				if (enemyOfOneContext != null)
 				{
-					PlayerMobile pm = (PlayerMobile)attacker;
+					enemyOfOneContext.OnHit(defender);
 
-					if (pm.WaitingForEnemy)
-					{
-						pm.EnemyOfOneType = defender.GetType();
-						pm.WaitingForEnemy = false;
-					}
-
-					if (pm.EnemyOfOneType == defender.GetType())
+					if (enemyOfOneContext.IsEnemy(defender))
 					{
 						defender.FixedEffect(0x37B9, 10, 5, 1160, 0);
-
-						percentageBonus += 50;
+						percentageBonus += enemyOfOneContext.DamageScalar;
 					}
 				}
 			}
+			#endregion
 
 			int packInstinctBonus = GetPackInstinctBonus(attacker, defender);
 
@@ -2321,7 +2315,7 @@ namespace Server.Items
 
 			TransformContext context = TransformationSpellHelper.GetContext(defender);
 
-			if ((m_Slayer == SlayerName.Silver || m_Slayer2 == SlayerName.Silver || SetHelper.GetSetSlayer(attacker) == SlayerName.Silver) 
+			if ((m_Slayer == SlayerName.Silver || m_Slayer2 == SlayerName.Silver || SetHelper.GetSetSlayer(attacker) == SlayerName.Silver)
                 && ((context != null && context.Spell is NecromancerSpell && context.Type != typeof(HorrificBeastSpell))
                 || (defender is BaseCreature && (defender.Body == 747 || defender.Body == 748 || defender.Body == 749 || defender.Hue == 0x847E))))
 			{
@@ -2406,7 +2400,7 @@ namespace Server.Items
 			else if (Core.AOS && damage == 0) // parried
 			{
 				if (a != null && a.Validate(attacker) /*&& a.CheckMana( attacker, true )*/)
-					// Parried special moves have no mana cost 
+					// Parried special moves have no mana cost
 				{
 					a = null;
 					WeaponAbility.ClearCurrentAbility(attacker);
@@ -2414,6 +2408,13 @@ namespace Server.Items
 					attacker.SendLocalizedMessage(1061140); // Your attack was parried!
 				}
 			}
+
+            // Skill Masteries
+            if (WhiteTigerFormSpell.CheckEvasion(defender))
+            {
+                defender.Emote("*evades*"); // Is this right?
+                return;
+            }
 
 			#region Mondain's Legacy
 			if (m_Immolating)
@@ -2466,7 +2467,7 @@ namespace Server.Items
             }
             #endregion
 
-            AddBlood(attacker, defender, damage);
+            Timer.DelayCall(() => AddBlood(attacker, defender, damage));
 
 			if (Core.ML && this is BaseRanged)
 			{
@@ -2855,8 +2856,8 @@ namespace Server.Items
 						damageBonus += 6;
 					else if (perc >= 1)
 						damageBonus += 3;
-				} 
-				
+				}
+
 				TransformContext context = TransformationSpellHelper.GetContext(attacker);
 
 				if (context != null && context.Spell is ReaperFormSpell)
@@ -3159,9 +3160,9 @@ namespace Server.Items
 
         private List<SlayerName> _SuperSlayers = new List<SlayerName>()
         {
-            SlayerName.Repond, SlayerName.Silver, SlayerName.Fey, 
-            SlayerName.ElementalBan, SlayerName.Exorcism, SlayerName.ArachnidDoom, 
-            SlayerName.ReptilianDeath, SlayerName.Dinosaur, SlayerName.Myrmidex, 
+            SlayerName.Repond, SlayerName.Silver, SlayerName.Fey,
+            SlayerName.ElementalBan, SlayerName.Exorcism, SlayerName.ArachnidDoom,
+            SlayerName.ReptilianDeath, SlayerName.Dinosaur, SlayerName.Myrmidex,
             SlayerName.Eodon
         };
 
@@ -3566,7 +3567,7 @@ namespace Server.Items
 			    lumberValue = (lumberValue/5.0)/100.0;
 			    if (lumberValue > 0.2)
 			        lumberValue = 0.2;
-			    
+
 				modifiers += lumberValue;
 
 				if (lumberValue >= 100.0)
@@ -3780,7 +3781,7 @@ namespace Server.Items
 
 			// Version 11
 			writer.Write(m_TimesImbued);
-         
+
             #endregion
 
             // Version 10
@@ -4149,7 +4150,7 @@ namespace Server.Items
 				case 11:
 					{
 						m_TimesImbued = reader.ReadInt();
-                     
+
                         #endregion
 
                         goto case 10;
@@ -4214,7 +4215,7 @@ namespace Server.Items
 				case 5:
 					{
 						SaveFlag flags;
-                        
+
                         if(version < 13)
                             flags = (SaveFlag)reader.ReadInt();
                         else
@@ -4454,12 +4455,6 @@ namespace Server.Items
 							((Mobile)Parent).AddSkillMod(m_MageMod);
 						}
 
-                        if (Core.TOL && m_AosWeaponAttributes.MysticWeapon != 0 && m_AosWeaponAttributes.MysticWeapon != 30 && Parent is Mobile)
-                        {
-                            m_MysticMod = new DefaultSkillMod(SkillName.Mysticism, true, -30 + m_AosWeaponAttributes.MysticWeapon);
-                            ((Mobile)Parent).AddSkillMod(m_MysticMod);
-                        }
-
 						if (GetSaveFlag(flags, SaveFlag.PlayerConstructed))
 						{
 							m_PlayerConstructed = true;
@@ -4525,6 +4520,12 @@ namespace Server.Items
                         else
                         {
                             m_ExtendedWeaponAttributes = new ExtendedWeaponAttributes(this);
+                        }
+
+                        if (Core.TOL && m_ExtendedWeaponAttributes.MysticWeapon != 0 && m_ExtendedWeaponAttributes.MysticWeapon != 30 && Parent is Mobile)
+                        {
+                            m_MysticMod = new DefaultSkillMod(SkillName.Mysticism, true, -30 + m_ExtendedWeaponAttributes.MysticWeapon);
+                            ((Mobile)Parent).AddSkillMod(m_MysticMod);
                         }
 
                         break;
@@ -4949,10 +4950,7 @@ namespace Server.Items
                 }
                 else if (m_ReforgedSuffix != ReforgedSuffix.None)
                 {
-                    if (m_ReforgedSuffix == ReforgedSuffix.Minax)
-                        list.Add(1154507, String.Format("{0}", GetNameString())); // ~1_ITEM~ bearing the crest of Minax
-                    else
-                        list.Add(1151758, String.Format("{0}\t#{1}", GetNameString(), RunicReforging.GetSuffixName(m_ReforgedSuffix))); // ~1_ITEM~ of ~2_SUFFIX~
+                    RunicReforging.AddSuffixName(list, m_ReforgedSuffix, GetNameString());
                 }
             }
 			else if (oreType != 0)
@@ -4975,14 +4973,14 @@ namespace Server.Items
             }
 
 			/*
-            * Want to move this to the engraving tool, let the non-harmful 
+            * Want to move this to the engraving tool, let the non-harmful
             * formatting show, and remove CLILOCs embedded: more like OSI
             * did with the books that had markup, etc.
-            * 
-            * This will have a negative effect on a few event things imgame 
+            *
+            * This will have a negative effect on a few event things imgame
             * as is.
-            * 
-            * If we cant find a more OSI-ish way to clean it up, we can 
+            *
+            * If we cant find a more OSI-ish way to clean it up, we can
             * easily put this back, and use it in the deserialize
             * method and engraving tool, to make it perm cleaned up.
             */
@@ -5071,7 +5069,7 @@ namespace Server.Items
 					list.Add(1060659, "Experience\t{0}", levitem.Experience);
 				}
 			}
-           
+
 
 			if (IsImbued)
 			{
@@ -5084,7 +5082,7 @@ namespace Server.Items
 			}
 
             if (m_Altered)
-                list.Add(1111880); // Altered  
+                list.Add(1111880); // Altered
 
             #region Factions
             if (m_FactionState != null)
@@ -5101,12 +5099,12 @@ namespace Server.Items
                 if (SetID == SetItem.Bestial)
                     list.Add(1151541, BestialSetHelper.GetTotalBerserk(this).ToString()); // Berserk ~1_VAL~
 
-                if (this.BardMasteryBonus)
+                if (BardMasteryBonus)
                     list.Add(1151553); // Activate: Bard Mastery Bonus x2<br>(Effect: 1 min. Cooldown: 30 min.)
 
                 if (m_SetEquipped)
 				{
-					list.Add(1073492); // Full Weapon/Armor Set Present			
+					list.Add(1073492); // Full Weapon/Armor Set Present
 					GetSetProperties(list);
 				}
 			}
@@ -5224,11 +5222,11 @@ namespace Server.Items
             #region Stygian Abyss
             if (EnchantedWeilder != null)
             {
-                if (Server.Spells.Mystic.EnchantSpell.IsUnderSpellEffects(EnchantedWeilder, this))
+                if (Server.Spells.Mysticism.EnchantSpell.IsUnderSpellEffects(EnchantedWeilder, this))
                 {
-                    bonus = Server.Spells.Mystic.EnchantSpell.BonusAttribute(EnchantedWeilder);
-                    enchantBonus = Server.Spells.Mystic.EnchantSpell.BonusValue(EnchantedWeilder);
-                    fcMalus = Server.Spells.Mystic.EnchantSpell.CastingMalus(EnchantedWeilder, this);
+                    bonus = Server.Spells.Mysticism.EnchantSpell.BonusAttribute(EnchantedWeilder);
+                    enchantBonus = Server.Spells.Mysticism.EnchantSpell.BonusValue(EnchantedWeilder);
+                    fcMalus = Server.Spells.Mysticism.EnchantSpell.CastingMalus(EnchantedWeilder, this);
                 }
             }
             #endregion
@@ -5493,11 +5491,11 @@ namespace Server.Items
 				list.Add(1060438, (30 - prop).ToString()); // mage weapon -~1_val~ skill
 			}
 
-            if ((prop = m_AosWeaponAttributes.MysticWeapon) != 0)
+            if ((prop = m_ExtendedWeaponAttributes.MysticWeapon) != 0)
             {
                 list.Add(1155881, (30 - prop).ToString());   // mystic weapon -~1_val~ skill
             }
-            else if ((prop = Parent is Mobile ? Enhancement.GetValue((Mobile)Parent, AosWeaponAttribute.MysticWeapon) : 0) != 0)
+            else if ((prop = Parent is Mobile ? Enhancement.GetValue((Mobile)Parent, ExtendedWeaponAttribute.MysticWeapon) : 0) != 0)
             {
                 list.Add(1155881, (30 - prop).ToString());   // mystic weapon -~1_val~ skill
             }
@@ -5740,7 +5738,7 @@ namespace Server.Items
 
 			if (IsSetItem && !m_SetEquipped)
 			{
-				list.Add(1072378); // <br>Only when full set is present:				
+				list.Add(1072378); // <br>Only when full set is present:
 				GetSetProperties(list);
 			}
 
@@ -6081,7 +6079,7 @@ namespace Server.Items
         {
             get
             {
-                return (this.SetID == SetItem.Virtuoso);
+                return (SetID == SetItem.Virtuoso);
             }
         }
 
@@ -6133,7 +6131,7 @@ namespace Server.Items
 
 			if ((prop = m_SetSelfRepair) != 0 && WeaponAttributes.SelfRepair == 0)
 			{
-				list.Add(1060450, prop.ToString()); // self repair ~1_val~	
+				list.Add(1060450, prop.ToString()); // self repair ~1_val~
 			}
 
 			SetHelper.GetSetProperties(list, this);

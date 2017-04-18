@@ -110,16 +110,27 @@ namespace Server.Engines.Shadowguard
             {
                 if (e != null)
                 {
-                    DateTime end = e.StartTime + e.EncounterDuration;
-
-                    if (!e.DoneWarning && DateTime.UtcNow > end - TimeSpan.FromMinutes(5))
-                        e.DoWarning();
-                    else if (DateTime.UtcNow >= end)
+                    if (e.EncounterDuration != TimeSpan.MaxValue)
                     {
-                        e.Expire();
+                        DateTime end = e.StartTime + e.EncounterDuration;
+
+                        if (!e.DoneWarning && DateTime.UtcNow > end - TimeSpan.FromMinutes(5))
+                        {
+                            e.DoWarning();
+                        }
+                        else if (DateTime.UtcNow >= end)
+                        {
+                            e.Expire();
+                        }
+                        else
+                        {
+                            e.OnTick();
+                        }
                     }
                     else
+                    {
                         e.OnTick();
+                    }
                 }
             });
         }
@@ -808,11 +819,14 @@ namespace Server.Engines.Shadowguard
             {
                 Timer.DelayCall(TimeSpan.FromSeconds(2), () =>
                 {
-                    Instance.Encounter.CheckPlayerStatus(m);
+                    if(Instance.Encounter != null)
+                        Instance.Encounter.CheckPlayerStatus(m);
                 });
             }
-            else if (m is BaseCreature)
+            else if (m is BaseCreature && Instance.Encounter != null)
+            {
                 Instance.Encounter.OnCreatureKilled((BaseCreature)m);
+            }
         }
 
         public override bool OnTarget(Mobile m, Server.Targeting.Target t, object o)
