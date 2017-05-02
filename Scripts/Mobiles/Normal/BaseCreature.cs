@@ -325,9 +325,6 @@ namespace Server.Mobiles
         [CommandProperty(AccessLevel.GameMaster)]
         public bool IsPrisoner { get; set; }
 
-        [CommandProperty(AccessLevel.GameMaster)]
-        public int QLPoints { get; set; }
-
         protected DateTime SummonEnd { get { return m_SummonEnd; } set { m_SummonEnd = value; } }
 
         public virtual Faction FactionAllegiance { get { return null; } }
@@ -2301,9 +2298,6 @@ namespace Server.Mobiles
 
             // Mondain's Legacy version 19
             writer.Write(m_Allured);
-
-            //Version 20 Queens Loyalty
-            //writer.Write(m_QLPoints);
         }
 
         private static readonly double[] m_StandardActiveSpeeds = new[] { 0.175, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8 };
@@ -4166,16 +4160,23 @@ namespace Server.Mobiles
 
             m_IdleReleaseTime = DateTime.UtcNow + TimeSpan.FromSeconds(Utility.RandomMinMax(15, 25));
 
-            if (Body.IsHuman)
+            if (Body.IsHuman && !Mounted)
             {
-                switch (Utility.Random(2))
+                if (Flying)
                 {
-                    case 0:
-                        Animate(5, 5, 1, true, true, 1);
-                        break;
-                    case 1:
-                        Animate(6, 5, 1, true, false, 1);
-                        break;
+                    Animate(66, 10, 1, true, false, 1);
+                }
+                else
+                {
+                    switch (Utility.Random(2))
+                    {
+                        case 0:
+                            Animate(5, 5, 1, true, true, 1);
+                            break;
+                        case 1:
+                            Animate(6, 5, 1, true, false, 1);
+                            break;
+                    }
                 }
             }
             else if (Body.IsAnimal)
@@ -4208,20 +4209,6 @@ namespace Server.Mobiles
 
             PlaySound(GetIdleSound());
             return true; // entered idle state
-        }
-
-        /*
-			this way, due to the huge number of locations this will have to be changed
-			Perhaps we can change this in the future when fixing game play is not the
-			major issue.
-		*/
-
-        public virtual void CheckedAnimate(int action, int frameCount, int repeatCount, bool forward, bool repeat, int delay)
-        {
-            if (!Mounted)
-            {
-                base.Animate(action, frameCount, repeatCount, forward, repeat, delay);
-            }
         }
 
         public override void Animate(int action, int frameCount, int repeatCount, bool forward, bool repeat, int delay)
@@ -5653,13 +5640,6 @@ namespace Server.Mobiles
             {
                 GiveSAArtifact(mob);
             }
-
-            /*if (mob is PlayerMobile && mob.Map == Map.TerMur && m_QLPoints > 0)
-            {
-                PlayerMobile pm = mob as PlayerMobile;
-                pm.Exp += m_QLPoints;
-                pm.SendMessage("You have been awarded {0} points for your loyalty to the Queen of TerMur!", m_QLPoints);
-            }*/
 
             EventSink.InvokeOnKilledBy(new OnKilledByEventArgs(this, mob));
         }
